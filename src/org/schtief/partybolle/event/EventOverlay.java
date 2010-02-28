@@ -127,7 +127,6 @@ public class EventOverlay extends ItemizedOverlay<EventOverlayItem>
 		setFocus(prev);		
 	}
 
-
 	public void next() {
 		if(mOverlays.size()==0)
 			return;

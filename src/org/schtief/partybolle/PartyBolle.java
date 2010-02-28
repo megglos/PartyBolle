@@ -15,8 +15,9 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with PartyBolle.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 package org.schtief.partybolle;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -26,10 +27,14 @@ import org.schtief.partybolle.event.EventManager;
 import org.schtief.partybolle.event.EventOverlay;
 import org.schtief.partybolle.event.EventOverlayItem;
 import org.schtief.partybolle.foursquare.AutoCheckinActivity;
-import org.schtief.partybolle.foursquare.AutoCheckinService;
 import org.schtief.partybolle.foursquare.FoursquareManager;
 import org.schtief.partybolle.foursquare.FoursquareOverlay;
 import org.schtief.partybolle.foursquare.FoursquareOverlayItem;
+import org.schtief.partybolle.haltestellen.HaltestellenManager;
+import org.schtief.partybolle.haltestellen.HaltestellenOverlay;
+import org.schtief.partybolle.haltestellen.HaltestellenOverlayItem;
+import org.schtief.partybolle.haltestellen.Stop;
+import org.schtief.partybolle.haltestellen.StopsParser;
 import org.schtief.partybolle.providers.VenueQuerySuggestionsProvider;
 import org.schtief.partybolle.twitter.TweetDialog;
 import org.schtief.partybolle.twitter.TwitterManager;
@@ -88,31 +93,32 @@ import com.joelapenna.foursquare.types.Group;
 import com.joelapenna.foursquare.types.Venue;
 
 public class PartyBolle extends MapActivity implements LocationListener {
-	public static final String LOG_TAG	=	"PartyBolle";
+	public static final String LOG_TAG = "PartyBolle";
 
-	public static float DISPLAY_SCALE	=	1;
-	
-	private Handler	handler	= new Handler();
+	public static float DISPLAY_SCALE = 1;
 
-	EventManager	eventManager	=	null;
-	public FoursquareManager	foursquareManager	=	null;
-	public TwitterManager	twitterManager	=	null;
-	public FavoriteManager	favoriteManager	=	null;
+	private Handler handler = new Handler();
 
-	private LocationManager locationManager	=	null;
+	EventManager eventManager = null;
+	public FoursquareManager foursquareManager = null;
+	public TwitterManager twitterManager = null;
+	public FavoriteManager favoriteManager = null;
+	public HaltestellenManager haltestellenManager = null;
 
-	private static final int MENU_MY_LOCATION 	= Menu.FIRST + 1;
-//	private static final int MENU_REFRESH	 	= Menu.FIRST + 2;
-//	private static final int MENU_ADD_EVENT 	= Menu.FIRST + 3;
-	private static final int MENU_PREFERENCES 	= Menu.FIRST + 4;
-	private static final int MENU_SEARCH	 	= Menu.FIRST + 5;
-	private static final int MENU_TWITTER_LIVE	= Menu.FIRST + 6;
-	private static final int MENU_CHALLENGE		= Menu.FIRST + 7;
-	private static final int MENU_TWITTER		= Menu.FIRST + 8;
-	private static final int MENU_SCREENSHOT	= Menu.FIRST + 9;
-	
-	private static final int MENU_AUTOCHECKIN	= Menu.FIRST + 10;
-	
+	private LocationManager locationManager = null;
+
+	private static final int MENU_MY_LOCATION = Menu.FIRST + 1;
+	// private static final int MENU_REFRESH = Menu.FIRST + 2;
+	// private static final int MENU_ADD_EVENT = Menu.FIRST + 3;
+	private static final int MENU_PREFERENCES = Menu.FIRST + 4;
+	private static final int MENU_SEARCH = Menu.FIRST + 5;
+	private static final int MENU_TWITTER_LIVE = Menu.FIRST + 6;
+	private static final int MENU_CHALLENGE = Menu.FIRST + 7;
+	private static final int MENU_TWITTER = Menu.FIRST + 8;
+	private static final int MENU_SCREENSHOT = Menu.FIRST + 9;
+
+	private static final int MENU_AUTOCHECKIN = Menu.FIRST + 10;
+
 	private static final int REQUEST_CODE_PREFERENCES = 1;
 
 	/** Called when the activity is first created. */
@@ -125,57 +131,61 @@ public class PartyBolle extends MapActivity implements LocationListener {
 	TwitterOverlay twitterOverlay;
 	InfoOverlay infoOverlay;
 	FavoriteOverlay favoriteOverlay;
+	HaltestellenOverlay haltestellenOverlay;
 
 	ImageButton bolleImageButton;
 	ImageButton favoriteImageButton;
 	ImageButton eventImageButton;
 	ImageButton twitterImageButton;
 	ImageButton foursquareImageButton;
+	ImageButton haltestellenImageButton;
 
 	SharedPreferences preferences;
 
 	GeoPoint location;
 
-	private OverlayItem lastestOverlay	=	null;
+	private OverlayItem lastestOverlay = null;
 	public Location actualLocation;
 
 	public static PartyBolle instance;
-	private boolean showFavorites	=	false;
+	private boolean showFavorites = false;
 
 	private CheckBox help1;
 
 	private CheckBox help2;
-	
+
 	public void onCreate(Bundle savedInstanceState) {
-		Log.i(LOG_TAG, "onCreate savedInstanceState "+savedInstanceState);
-		if(null!=getIntent()){
-			Log.i(LOG_TAG, "got Intent "+getIntent().getAction()+ " " +getIntent().getStringExtra(SearchManager.QUERY));
+		Log.i(LOG_TAG, "onCreate savedInstanceState " + savedInstanceState);
+		if (null != getIntent()) {
+			Log.i(LOG_TAG, "got Intent " + getIntent().getAction() + " "
+					+ getIntent().getStringExtra(SearchManager.QUERY));
 		}
 		super.onCreate(savedInstanceState);
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		setContentView(R.layout.main);
-		
-		//breite des screens hole fuer skalierung
-		WindowManager w = getWindowManager(); 
-	    Display d = w.getDefaultDisplay(); 
-	    DISPLAY_SCALE = (float)(d.getWidth()/320.0);
-	    Log.i(LOG_TAG, "Resolution :"+d.getWidth()+" scale: "+DISPLAY_SCALE);
-		
-		
-		this.instance=this;
 
-		if(null==mapView){
+		// breite des screens hole fuer skalierung
+		WindowManager w = getWindowManager();
+		Display d = w.getDefaultDisplay();
+		DISPLAY_SCALE = (float) (d.getWidth() / 320.0);
+		Log.i(LOG_TAG, "Resolution :" + d.getWidth() + " scale: "
+				+ DISPLAY_SCALE);
+
+		PartyBolle.instance = this;
+
+		if (null == mapView) {
 			Log.i(LOG_TAG, "get new MapView");
 			mapView = (MapView) findViewById(R.id.mapview);
 		}
-		
+
 		preferences = PreferenceManager.getDefaultSharedPreferences(this);
 
-		bolleImageButton		=	(ImageButton) findViewById(R.id.BolleImageButton);
-		favoriteImageButton		=	(ImageButton) findViewById(R.id.FavoriteImageButton);
-		eventImageButton		=	(ImageButton) findViewById(R.id.EventImageButton);
-		twitterImageButton		=	(ImageButton) findViewById(R.id.TwitterImageButton);
-		foursquareImageButton	=	(ImageButton) findViewById(R.id.FoursquareImageButton);
+		bolleImageButton = (ImageButton) findViewById(R.id.BolleImageButton);
+		favoriteImageButton = (ImageButton) findViewById(R.id.FavoriteImageButton);
+		eventImageButton = (ImageButton) findViewById(R.id.EventImageButton);
+		twitterImageButton = (ImageButton) findViewById(R.id.TwitterImageButton);
+		foursquareImageButton = (ImageButton) findViewById(R.id.FoursquareImageButton);
+		haltestellenImageButton = (ImageButton) findViewById(R.id.HaltestellenImageButton);
 
 		// manuell mapcontrols
 		controlLayout = (LinearLayout) findViewById(R.id.controlLayout);
@@ -185,22 +195,26 @@ public class PartyBolle extends MapActivity implements LocationListener {
 		mapView.setClickable(true);
 		mapView.getController().setZoom(14);
 
-		//get latest position from preferences
-		int latestLat	=	preferences.getInt("my_location_lat",-1);
-		int latestLon	=	preferences.getInt("my_location_lon",-1);
-		if(latestLat!=-1 && latestLon!=-1 && null == location){
-			mapView.getController().setCenter(new GeoPoint(latestLat, latestLon));
-			Log.i(LOG_TAG,"set Latest Location from Preferences");
-		}else if(null!=savedInstanceState && savedInstanceState.getInt("lat")>0){
-			mapView.getController().setCenter(new GeoPoint(savedInstanceState.getInt("lat"), savedInstanceState.getInt("lon")));
-			Log.i(LOG_TAG,"set Latest Location savedInstanceState");
-		}else{
+		// get latest position from preferences
+		int latestLat = preferences.getInt("my_location_lat", -1);
+		int latestLon = preferences.getInt("my_location_lon", -1);
+		if (latestLat != -1 && latestLon != -1 && null == location) {
+			mapView.getController().setCenter(
+					new GeoPoint(latestLat, latestLon));
+			Log.i(LOG_TAG, "set Latest Location from Preferences");
+		} else if (null != savedInstanceState
+				&& savedInstanceState.getInt("lat") > 0) {
+			mapView.getController().setCenter(
+					new GeoPoint(savedInstanceState.getInt("lat"),
+							savedInstanceState.getInt("lon")));
+			Log.i(LOG_TAG, "set Latest Location savedInstanceState");
+		} else {
 			mapView.getController().setCenter(new GeoPoint(52496700, 13454400));
-			Log.i(LOG_TAG,"set Latest Location to schtieF");
+			Log.i(LOG_TAG, "set Latest Location to schtieF");
 		}
 		mapOverlays = mapView.getOverlays();
 
-		foursquareOverlay= new FoursquareOverlay(this);
+		foursquareOverlay = new FoursquareOverlay(this);
 		mapOverlays.add(foursquareOverlay);
 
 		twitterOverlay = new TwitterOverlay(this);
@@ -214,70 +228,84 @@ public class PartyBolle extends MapActivity implements LocationListener {
 
 		infoOverlay = new InfoOverlay(this);
 		mapOverlays.add(infoOverlay);
-
-		//managers
-		if(null==eventManager)
-			eventManager	=	new EventManager(this,mapView,handler);
-
-		if(null==foursquareManager)
-			foursquareManager	=	new FoursquareManager(this,preferences,mapView,handler);
-
-		if(null==twitterManager)
-			twitterManager	=	new TwitterManager(this,preferences,mapView,handler);
 		
-		if(null==favoriteManager)
-			favoriteManager	=	new FavoriteManager(this,preferences,favoriteOverlay,handler);
+		haltestellenOverlay = new HaltestellenOverlay(this);
+		mapOverlays.add(haltestellenOverlay);
+
+		// managers
+		if (null == eventManager)
+			eventManager = new EventManager(this, mapView, handler);
+
+		if (null == foursquareManager)
+			foursquareManager = new FoursquareManager(this, preferences,
+					mapView, handler);
+
+		if (null == twitterManager)
+			twitterManager = new TwitterManager(this, preferences, mapView,
+					handler);
+
+		if (null == favoriteManager)
+			favoriteManager = new FavoriteManager(this, preferences,
+					favoriteOverlay, handler);
+		if (null == haltestellenManager)
+			haltestellenManager = new HaltestellenManager(this, mapView,
+					handler);
 
 		ImageLoader.initialize(this);
-		
-		locationManager	=	(LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+		locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 		setUpLocationManager();
 
 		help();
 		favoriteManager.loadFavorites();
 		addActionControls();
-		
-		//update bug
-		if(null!=preferences.getString("twitter_name_verified",null)&&null==preferences.getString("twitter_avatar_verified",null)){
+
+		// update bug
+		if (null != preferences.getString("twitter_name_verified", null)
+				&& null == preferences.getString("twitter_avatar_verified",
+						null)) {
 			twitterManager.verifyLogin();
 		}
 	}
 
-
-
 	private void help() {
-		if(!preferences.getBoolean("license", false)){		
+		if (!preferences.getBoolean("license", false)) {
 			AlertDialog.Builder builder = new AlertDialog.Builder(this);
-			builder.setMessage("PartyBolle ist programmiert von Mister Schtief unter Verwendung von ihm angepasster Open Source. \n\n" 
-				+	" Danke an Winterwell Associates 2008/2009 and ThinkTank Mathematics Ltd für den LGPL Twitter Code http://www.winterwell.com \n\n"
-				+ " Danke an Joe LaPenna für den Foursquare Apache License 2.0 Code http://code.google.com/p/foursquared \n\n"
-				+ " Danke an Matthias Käppler für seine Droid-Fu Library unter Apache License 2.0 http://github.com/kaeppler/droid-fu\n\n"
-				+ " Und Danke an den Berliner Android Stammtisch sowie Rose fuer ihre Geduld :-)" )
-			.setTitle("Lizenz Infos")
-			.setCancelable(false)
-			.setPositiveButton("OpenSource is dufte", new DialogInterface.OnClickListener() {
-				public void onClick(DialogInterface dialog, int id) {
-					SharedPreferences.Editor editor = preferences.edit();
-					editor.putBoolean("license", true);
-					editor.commit();
-					dialog.cancel();
-				}
-			}).setNegativeButton("nö keen Bock", new DialogInterface.OnClickListener() {
-				public void onClick(DialogInterface dialog, int id) {
-					dialog.cancel();
-					PartyBolle.this.finish();
-				}
-			});
+			builder
+					.setMessage(
+							"PartyBolle ist programmiert von Mister Schtief unter Verwendung von ihm angepasster Open Source. \n\n"
+									+ " Danke an Winterwell Associates 2008/2009 and ThinkTank Mathematics Ltd für den LGPL Twitter Code http://www.winterwell.com \n\n"
+									+ " Danke an Joe LaPenna für den Foursquare Apache License 2.0 Code http://code.google.com/p/foursquared \n\n"
+									+ " Danke an Matthias Käppler für seine Droid-Fu Library unter Apache License 2.0 http://github.com/kaeppler/droid-fu\n\n"
+									+ " Und Danke an den Berliner Android Stammtisch sowie Rose fuer ihre Geduld :-)")
+					.setTitle("Lizenz Infos").setCancelable(false)
+					.setPositiveButton("OpenSource is dufte",
+							new DialogInterface.OnClickListener() {
+								public void onClick(DialogInterface dialog,
+										int id) {
+									SharedPreferences.Editor editor = preferences
+											.edit();
+									editor.putBoolean("license", true);
+									editor.commit();
+									dialog.cancel();
+								}
+							}).setNegativeButton("nö keen Bock",
+							new DialogInterface.OnClickListener() {
+								public void onClick(DialogInterface dialog,
+										int id) {
+									dialog.cancel();
+									PartyBolle.this.finish();
+								}
+							});
 
 			AlertDialog alert = builder.create();
-			alert.show();			
-		}		
-		if(!preferences.getBoolean("help1", false)){
-			help1	=((CheckBox) findViewById(R.id.HelpCheckBox01));
+			alert.show();
+		}
+		if (!preferences.getBoolean("help1", false)) {
+			help1 = ((CheckBox) findViewById(R.id.HelpCheckBox01));
 			help1.setVisibility(View.VISIBLE);
 			help1.setOnCheckedChangeListener(new OnCheckedChangeListener() {
-				
-				
+
 				public void onCheckedChanged(CompoundButton arg0, boolean arg1) {
 					SharedPreferences.Editor editor = preferences.edit();
 					editor.putBoolean("help1", true);
@@ -287,304 +315,288 @@ public class PartyBolle extends MapActivity implements LocationListener {
 				}
 			});
 		}
-		if(!preferences.getBoolean("help2", false)){
-			help2	=((CheckBox) findViewById(R.id.HelpCheckBox02));
+		if (!preferences.getBoolean("help2", false)) {
+			help2 = ((CheckBox) findViewById(R.id.HelpCheckBox02));
 			help2.setVisibility(View.VISIBLE);
 			help2.setOnCheckedChangeListener(new OnCheckedChangeListener() {
-				
-				
+
 				public void onCheckedChanged(CompoundButton arg0, boolean arg1) {
 					SharedPreferences.Editor editor = preferences.edit();
 					editor.putBoolean("help2", true);
-					editor.commit();					
+					editor.commit();
 					help2.setVisibility(View.GONE);
 					help2.invalidate();
 				}
 			});
 		}
-			
+
 	}
-
-
 
 	/************** ACTIVITY STATE *****************/
 
-	
-	protected void onRestoreInstanceState(Bundle savedInstanceState)
-	{
-		Log.i(LOG_TAG, "onRestoreInstanceState "+savedInstanceState );
+	protected void onRestoreInstanceState(Bundle savedInstanceState) {
+		Log.i(LOG_TAG, "onRestoreInstanceState " + savedInstanceState);
 		super.onRestoreInstanceState(savedInstanceState);
 	}
 
-
-
-	
-	protected void onSaveInstanceState(Bundle outState)
-	{
-		Log.i(LOG_TAG, "onSaveInstanceState "+outState);
+	protected void onSaveInstanceState(Bundle outState) {
+		Log.i(LOG_TAG, "onSaveInstanceState " + outState);
 		super.onSaveInstanceState(outState);
 	}
 
-	
-	protected void onDestroy()
-	{
+	protected void onDestroy() {
 		Log.i(LOG_TAG, "onDestroy");
 		SharedPreferences.Editor editor = preferences.edit();
-		editor.putInt("my_location_lat", mapView.getMapCenter().getLatitudeE6());
-		editor.putInt("my_location_lon", mapView.getMapCenter().getLongitudeE6());
-		editor.commit();	
+		editor
+				.putInt("my_location_lat", mapView.getMapCenter()
+						.getLatitudeE6());
+		editor.putInt("my_location_lon", mapView.getMapCenter()
+				.getLongitudeE6());
+		editor.commit();
 
-		//jedes mal wenn was dazukommt
-//		favoriteManager.saveFavorites();
+		// jedes mal wenn was dazukommt
+		// favoriteManager.saveFavorites();
 
 		super.onDestroy();
 	}
 
-	
-	public void onNewIntent(Intent intent)
-	{
-		Log.i(LOG_TAG, "onNewIntent "+intent);
-    String action = intent.getAction();
-    String query = intent.getStringExtra(SearchManager.QUERY);
+	public void onNewIntent(Intent intent) {
+		Log.i(LOG_TAG, "onNewIntent " + intent);
+		String action = intent.getAction();
+		String query = intent.getStringExtra(SearchManager.QUERY);
 
-    if (intent == null) {
-//        if (DEBUG) Log.d(TAG, "No intent to search, querying default.");
-//        executeSearchTask(query);
+		if (intent == null) {
+			// if (DEBUG) Log.d(TAG, "No intent to search, querying default.");
+			// executeSearchTask(query);
 
-    } else if (Intent.ACTION_SEARCH.equals(action) && query != null) {
-        Log.i(LOG_TAG, "onNewIntent received search intent and saving.");
-        SearchRecentSuggestions suggestions = new SearchRecentSuggestions(this,
-                VenueQuerySuggestionsProvider.AUTHORITY, VenueQuerySuggestionsProvider.MODE);
-        suggestions.saveRecentQuery(query, null);
-        executeSearchTask(query);
-    } else {
-//        onSearchRequested();
-    }	
-   }
-	
-	private void executeSearchTask(String query)
-	{
+		} else if (Intent.ACTION_SEARCH.equals(action) && query != null) {
+			Log.i(LOG_TAG, "onNewIntent received search intent and saving.");
+			SearchRecentSuggestions suggestions = new SearchRecentSuggestions(
+					this, VenueQuerySuggestionsProvider.AUTHORITY,
+					VenueQuerySuggestionsProvider.MODE);
+			suggestions.saveRecentQuery(query, null);
+			executeSearchTask(query);
+		} else {
+			// onSearchRequested();
+		}
+	}
+
+	private void executeSearchTask(String query) {
 		this.foursquareManager.searchVenues(query);
 	}
 
-
-
-	
-	protected void onPause()
-	{
+	protected void onPause() {
 		Log.i(LOG_TAG, "onPause");
 		super.onPause();
 	}
 
-	
-	protected void onResume()
-	{
+	protected void onResume() {
 		Log.i(LOG_TAG, "onResume");
 		super.onResume();
 	}
 
-	
-	public void finish()
-	{
+	public void finish() {
 		Log.i(LOG_TAG, "finish");
 		super.finish();
 	}
 
-	
-	public void onLowMemory()
-	{
+	public void onLowMemory() {
 		Log.i(LOG_TAG, "onLowMemory");
 		super.onLowMemory();
 	}
-	
-	
-	protected void onPostResume()
-	{
+
+	protected void onPostResume() {
 		Log.i(LOG_TAG, "onPostResume");
 		super.onPostResume();
 	}
 
-	
-	protected void onRestart()
-	{
+	protected void onRestart() {
 		Log.i(LOG_TAG, "onRestart");
 		super.onRestart();
 	}
 
-//	
-//	public Object on
-//	{
-//		Log.i(LOG_TAG, "onRetainNonConfigurationInstance");
-//		super.onRetainNonConfigurationInstance();
-//	}
+	//	
+	// public Object on
+	// {
+	// Log.i(LOG_TAG, "onRetainNonConfigurationInstance");
+	// super.onRetainNonConfigurationInstance();
+	// }
 
-	
-	protected void onStart()
-	{
+	protected void onStart() {
 		Log.i(LOG_TAG, "onStart");
 		super.onStart();
 	}
 
-	
-	public void onConfigurationChanged(Configuration newConfig)
-	{
+	public void onConfigurationChanged(Configuration newConfig) {
 		Log.i(LOG_TAG, "onConfigurationChanged");
 		super.onConfigurationChanged(newConfig);
 	}
 
 	/************** ACTIVITY STATE *****************/
 
-
 	private void setUpLocationManager() {
 		final long MINIMUM_DISTANCECHANGE_FOR_UPDATE = 100; // in Meters
 		final long MINIMUM_TIME_BETWEEN_UPDATE = 60; // in Milliseconds???
 
 		// Get the first provider available
-		//		List<String> providers = this.locationManager.getAllProviders();
-		//		String strProvider = providers.get(0);//TODO warum den 1ten
+		// List<String> providers = this.locationManager.getAllProviders();
+		// String strProvider = providers.get(0);//TODO warum den 1ten
 
-		this.locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,
-				MINIMUM_TIME_BETWEEN_UPDATE, MINIMUM_DISTANCECHANGE_FOR_UPDATE,
-				this);
+		this.locationManager.requestLocationUpdates(
+				LocationManager.NETWORK_PROVIDER, MINIMUM_TIME_BETWEEN_UPDATE,
+				MINIMUM_DISTANCECHANGE_FOR_UPDATE, this);
 	}
 
-
 	private void addActionControls() {
-		//Bolles uffjaben
+		// Bolles uffjaben
 		bolleImageButton.setOnClickListener(new OnClickListener() {
-			
-			
+
 			public void onClick(View arg0) {
-				if(null==preferences.getString("twitter_name_verified", null))			{
-					AlertDialog.Builder builder = new AlertDialog.Builder(PartyBolle.this);
-					builder.setMessage("Alder wennde meene Uffjaben loesen willst, musste Twitter konfijurieren ick verwende dein Twittername um dich zu identifizieren!")
-					.setCancelable(false)
-					.setPositiveButton("Ja mach ick", new DialogInterface.OnClickListener() {
-						public void onClick(DialogInterface dialog, int id) {
-							dialog.cancel();
-						}
-					});
+				if (null == preferences
+						.getString("twitter_name_verified", null)) {
+					AlertDialog.Builder builder = new AlertDialog.Builder(
+							PartyBolle.this);
+					builder
+							.setMessage(
+									"Alder wennde meene Uffjaben loesen willst, musste Twitter konfijurieren ick verwende dein Twittername um dich zu identifizieren!")
+							.setCancelable(false).setPositiveButton(
+									"Ja mach ick",
+									new DialogInterface.OnClickListener() {
+										public void onClick(
+												DialogInterface dialog, int id) {
+											dialog.cancel();
+										}
+									});
 					AlertDialog alert = builder.create();
 					alert.show();
-				}else{	
-					//aktuelle Position speichern
-					if(null!=actualLocation){
+				} else {
+					// aktuelle Position speichern
+					if (null != actualLocation) {
 						SharedPreferences.Editor editor = preferences.edit();
-						editor.putFloat("last_location_lat", (float)actualLocation.getLatitude());
-						editor.putFloat("last_location_lon", (float)actualLocation.getLongitude());
-						editor.commit();	
+						editor.putFloat("last_location_lat",
+								(float) actualLocation.getLatitude());
+						editor.putFloat("last_location_lon",
+								(float) actualLocation.getLongitude());
+						editor.commit();
 					}
-					Intent intent = new Intent(PartyBolle.this,PartyBolleUffjaben.class);
-			        PartyBolle.this.startActivity(intent);
+					Intent intent = new Intent(PartyBolle.this,
+							PartyBolleUffjaben.class);
+					PartyBolle.this.startActivity(intent);
 				}
 			}
-		});	
-		
-		showFavorites	=	preferences.getBoolean("favorites", false);
+		});
+
+		showFavorites = preferences.getBoolean("favorites", false);
 		updateFavoriteState();
-		//favoriten
+		// favoriten
 		favoriteImageButton.setOnClickListener(new OnClickListener() {
-			
-			
+
 			public void onClick(View arg0) {
 				showFavorites = !showFavorites;
 				updateFavoriteState();
 				SharedPreferences.Editor editor = preferences.edit();
 				editor.putBoolean("favorites", showFavorites);
-				editor.commit();	
+				editor.commit();
 			}
-		});	
-		//Events
+		});
+		// Events
 		eventImageButton.setOnClickListener(new OnClickListener() {
-			
-			
+
 			public void onClick(View arg0) {
 				eventImageButton.setEnabled(false);
 				findViewById(R.id.EventProgressBar).setVisibility(View.VISIBLE);
 				eventManager.getEvents(null);
 			}
-		});	
+		});
 		eventImageButton.setOnLongClickListener(new OnLongClickListener() {
-			
-			
+
 			public boolean onLongClick(View arg0) {
-				lastestOverlay=null;
+				lastestOverlay = null;
 				eventOverlay.cleanup();
 				infoOverlay.showInfo(null);
 				mapView.invalidate();
 				return true;
 			}
-		});	
+		});
 
-		
-		//Twitter
+		// Twitter
 		twitterImageButton.setOnClickListener(new OnClickListener() {
-			
-			
+
 			public void onClick(View arg0) {
 				twitterImageButton.setEnabled(false);
-				findViewById(R.id.TwitterProgressBar).setVisibility(View.VISIBLE);
+				findViewById(R.id.TwitterProgressBar).setVisibility(
+						View.VISIBLE);
 				twitterManager.getTweets();
 			}
-		});	
+		});
 		twitterImageButton.setOnLongClickListener(new OnLongClickListener() {
-			
-			
+
 			public boolean onLongClick(View arg0) {
-				lastestOverlay=null;
+				lastestOverlay = null;
 				twitterOverlay.cleanup();
 				infoOverlay.showInfo(null);
 				mapView.invalidate();
 				return true;
 			}
-		});	
-		
-		//Foursquare
+		});
+
+		// Foursquare
 		foursquareImageButton.setOnClickListener(new OnClickListener() {
-			
+
 			public void onClick(View arg0) {
 				foursquareImageButton.setEnabled(false);
-				findViewById(R.id.FoursquareProgressBar).setVisibility(View.VISIBLE);
+				findViewById(R.id.FoursquareProgressBar).setVisibility(
+						View.VISIBLE);
 				foursquareManager.getVenues();
 			}
-		});	
+		});
 		foursquareImageButton.setOnLongClickListener(new OnLongClickListener() {
-			
-			
+
 			public boolean onLongClick(View arg0) {
-				lastestOverlay=null;
+				lastestOverlay = null;
 				foursquareOverlay.cleanup();
 				infoOverlay.showInfo(null);
 				mapView.invalidate();
 				return true;
 			}
-		});	
+		});
+		// Haltestellen
+		haltestellenImageButton.setOnClickListener(new OnClickListener() {
+
+			@Override
+			public void onClick(View v) {
+				haltestellenImageButton.setEnabled(false);
+				findViewById(R.id.HaltestellenProgressBar).setVisibility(
+						View.VISIBLE);
+				haltestellenManager.getHaltestellen();
+			}
+		});
 	}
 
 	protected void updateFavoriteState() {
-		if(showFavorites){
-			favoriteImageButton.setImageResource(android.R.drawable.btn_star_big_on);
+		if (showFavorites) {
+			favoriteImageButton
+					.setImageResource(android.R.drawable.btn_star_big_on);
 			favoriteOverlay.showFavorites(true);
-			//force map redraw
+			// force map redraw
 			mapView.invalidate();
-		}else{
-			favoriteImageButton.setImageResource(android.R.drawable.btn_star_big_off);					
+		} else {
+			favoriteImageButton
+					.setImageResource(android.R.drawable.btn_star_big_off);
 			favoriteOverlay.showFavorites(false);
 			infoOverlay.showInfo(null);
-			lastestOverlay=null;
-			//force map redraw
+			lastestOverlay = null;
+			// force map redraw
 			mapView.invalidate();
 		}
 	}
-
-
 
 	private void addControls(LinearLayout controlLayout2) {
 
 		// listcontrol
 		ImageView list = (ImageView) findViewById(R.id.listImageView);
 		list.setOnClickListener(new OnClickListener() {
-			
+
 			public void onClick(View arg0) {
 				showList();
 			}
@@ -593,7 +605,7 @@ public class PartyBolle extends MapActivity implements LocationListener {
 		// prev/next controls
 		ImageView prev = (ImageView) findViewById(R.id.prevImageView);
 		prev.setOnClickListener(new OnClickListener() {
-			
+
 			public void onClick(View arg0) {
 				Log.i("PartyUmkreis", "prev");
 				prev();
@@ -601,7 +613,7 @@ public class PartyBolle extends MapActivity implements LocationListener {
 		});
 		ImageView next = (ImageView) findViewById(R.id.nextImageView);
 		next.setOnClickListener(new OnClickListener() {
-			
+
 			public void onClick(View arg0) {
 				Log.i("PartyUmkreis", "next");
 				next();
@@ -611,20 +623,19 @@ public class PartyBolle extends MapActivity implements LocationListener {
 		// own zoomcontrols
 		ImageView zoomIn = (ImageView) findViewById(R.id.zoomInImageView);
 		zoomIn.setOnClickListener(new OnClickListener() {
-			
+
 			public void onClick(View arg0) {
 				mapView.getController().zoomIn();
-				Log.d(LOG_TAG, "zoom in "+mapView.getZoomLevel());
+				Log.d(LOG_TAG, "zoom in " + mapView.getZoomLevel());
 			}
 		});
 
 		ImageView zoomOut = (ImageView) findViewById(R.id.zoomOutImageView);
 		zoomOut.setOnClickListener(new OnClickListener() {
 
-			
 			public void onClick(View arg0) {
 				mapView.getController().zoomOut();
-				Log.d(LOG_TAG, "zoom out "+mapView.getZoomLevel());
+				Log.d(LOG_TAG, "zoom out " + mapView.getZoomLevel());
 			}
 		});
 	}
@@ -632,59 +643,67 @@ public class PartyBolle extends MapActivity implements LocationListener {
 	private void showList() {
 		// TODO Listenfunktion implementieren
 		AlertDialog.Builder builder = new AlertDialog.Builder(this);
-		builder.setMessage("Alder Listenansicht jibs erst in der beta Version!")
-		.setCancelable(false)
-		.setPositiveButton("Ick freu ma", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int id) {
-				dialog.cancel();
-			}
-		});
+		builder
+				.setMessage(
+						"Alder Listenansicht jibs erst in der beta Version!")
+				.setCancelable(false).setPositiveButton("Ick freu ma",
+						new DialogInterface.OnClickListener() {
+							public void onClick(DialogInterface dialog, int id) {
+								dialog.cancel();
+							}
+						});
 		AlertDialog alert = builder.create();
 		alert.show();
 	}
 
 	private void prev() {
-		if(null==lastestOverlay)
-			return ;//TODO das raussuchen was auf der Karte ist
-		if(lastestOverlay instanceof EventOverlayItem)
+		if (null == lastestOverlay)
+			return;// TODO das raussuchen was auf der Karte ist
+		if (lastestOverlay instanceof EventOverlayItem)
 			eventOverlay.prev();
-		else if(lastestOverlay instanceof FoursquareOverlayItem)
+		else if (lastestOverlay instanceof FoursquareOverlayItem)
 			foursquareOverlay.prev();
 		else
 			twitterOverlay.prev();
 	}
 
 	private void next() {
-		if(null==lastestOverlay)
-			return ;//TODO das raussuchen was auf der Karte ist
-		
-		//decide which overlay anhan welcher zuletzt gewaehlt wurde
-		if(lastestOverlay instanceof EventOverlayItem)
+		if (null == lastestOverlay)
+			return;// TODO das raussuchen was auf der Karte ist
+
+		// decide which overlay anhan welcher zuletzt gewaehlt wurde
+		if (lastestOverlay instanceof EventOverlayItem)
 			eventOverlay.next();
-		else if(lastestOverlay instanceof FoursquareOverlayItem)
+		else if (lastestOverlay instanceof FoursquareOverlayItem)
 			foursquareOverlay.next();
 		else
 			twitterOverlay.next();
 	}
 
-	
 	protected boolean isRouteDisplayed() {
 		return false;
 	}
 
-	
 	public boolean onCreateOptionsMenu(Menu menu) {
 		super.onCreateOptionsMenu(menu);
-		menu.add(0, MENU_MY_LOCATION, 0, "Heeme").setIcon(android.R.drawable.ic_menu_mylocation);
-//		menu.add(0, MENU_ADD_EVENT, 0, "neue Sause").setIcon(android.R.drawable.ic_menu_add);
-		menu.add(0, MENU_PREFERENCES, 0, "Einstellungen").setIcon(android.R.drawable.ic_menu_preferences);
-		menu.add(0, MENU_SEARCH, 0, "4Sq. Suche").setIcon(R.drawable.foursquare_32);
-//		menu.add(0, MENU_TWITTER_LIVE, 0, "Twitter Leif").setIcon(android.R.drawable.ic_media_play );
-		menu.add(0, MENU_CHALLENGE, 0, "Bolles Uffjaben").setIcon(android.R.drawable.ic_menu_info_details);
+		menu.add(0, MENU_MY_LOCATION, 0, "Heeme").setIcon(
+				android.R.drawable.ic_menu_mylocation);
+		// menu.add(0, MENU_ADD_EVENT, 0,
+		// "neue Sause").setIcon(android.R.drawable.ic_menu_add);
+		menu.add(0, MENU_PREFERENCES, 0, "Einstellungen").setIcon(
+				android.R.drawable.ic_menu_preferences);
+		menu.add(0, MENU_SEARCH, 0, "4Sq. Suche").setIcon(
+				R.drawable.foursquare_32);
+		// menu.add(0, MENU_TWITTER_LIVE, 0,
+		// "Twitter Leif").setIcon(android.R.drawable.ic_media_play );
+		menu.add(0, MENU_CHALLENGE, 0, "Bolles Uffjaben").setIcon(
+				android.R.drawable.ic_menu_info_details);
 		menu.add(0, MENU_TWITTER, 0, "Twittern").setIcon(R.drawable.twitter_32);
-//		if(null==AutoCheckinService.getInstance())
-		menu.add(0, MENU_AUTOCHECKIN, 0, "AutoCheckin Service").setIcon(R.drawable.foursquare_32);
-		menu.add(0, MENU_SCREENSHOT, 0, "Screenshot").setIcon(android.R.drawable.ic_menu_camera);
+		// if(null==AutoCheckinService.getInstance())
+		menu.add(0, MENU_AUTOCHECKIN, 0, "AutoCheckin Service").setIcon(
+				R.drawable.foursquare_32);
+		menu.add(0, MENU_SCREENSHOT, 0, "Screenshot").setIcon(
+				android.R.drawable.ic_menu_camera);
 		return true;
 	}
 
@@ -695,16 +714,17 @@ public class PartyBolle extends MapActivity implements LocationListener {
 			updateLocation();
 			return true;
 		}
-//		case MENU_ADD_EVENT: {
-//			Toast.makeText(this, "Get Konzert", Toast.LENGTH_SHORT).show();
-//			Log.i("PartyUmkreis", "Get Konzert");
-//
-//			return true;
-//		}
+			// case MENU_ADD_EVENT: {
+			// Toast.makeText(this, "Get Konzert", Toast.LENGTH_SHORT).show();
+			// Log.i("PartyUmkreis", "Get Konzert");
+			//
+			// return true;
+			// }
 		case MENU_PREFERENCES: {
 			Intent i = new Intent(this, Preferences.class);
-			startActivityForResult(i, REQUEST_CODE_PREFERENCES); //see onActivityResult
-			return true;	
+			startActivityForResult(i, REQUEST_CODE_PREFERENCES); // see
+																	// onActivityResult
+			return true;
 		}
 		case MENU_SEARCH: {
 			onSearchRequested();
@@ -712,257 +732,282 @@ public class PartyBolle extends MapActivity implements LocationListener {
 		}
 		case MENU_TWITTER_LIVE: {
 			AlertDialog.Builder builder = new AlertDialog.Builder(this);
-			builder.setMessage("Alder die Twitter Leifwju aktivier ich in der beta!")
-			.setCancelable(false)
-			.setPositiveButton("Ick freu ma", new DialogInterface.OnClickListener() {
-				public void onClick(DialogInterface dialog, int id) {
-					dialog.cancel();
-				}
-			});
+			builder.setMessage(
+					"Alder die Twitter Leifwju aktivier ich in der beta!")
+					.setCancelable(false).setPositiveButton("Ick freu ma",
+							new DialogInterface.OnClickListener() {
+								public void onClick(DialogInterface dialog,
+										int id) {
+									dialog.cancel();
+								}
+							});
 			AlertDialog alert = builder.create();
-			alert.show();			
+			alert.show();
 			return true;
 		}
-		case MENU_SCREENSHOT:{
-			Bitmap image = Bitmap.createBitmap(mapView.getWidth(), mapView.getHeight(), Bitmap.Config.RGB_565);
+		case MENU_SCREENSHOT: {
+			Bitmap image = Bitmap.createBitmap(mapView.getWidth(), mapView
+					.getHeight(), Bitmap.Config.RGB_565);
 			mapView.draw(new Canvas(image));
 			try {
-				File file= new File(Environment.getExternalStorageDirectory() + File.separator + "PartyBolle.png");
-				image.compress(CompressFormat.PNG, 100, new FileOutputStream(file));
-				String url = Media.insertImage(getContentResolver(), file.getAbsolutePath(), file.getName(), file.getName());
+				File file = new File(Environment.getExternalStorageDirectory()
+						+ File.separator + "PartyBolle.png");
+				image.compress(CompressFormat.PNG, 100, new FileOutputStream(
+						file));
+				String url = Media.insertImage(getContentResolver(), file
+						.getAbsolutePath(), file.getName(), file.getName());
 
 				Intent shareIntent = new Intent(Intent.ACTION_SEND);
-				shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); 
-//				shareIntent.putExtra(Intent.EXTRA_SUBJECT, subject);
-//				shareIntent.putExtra(Intent.EXTRA_TEXT, body);
+				shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+				// shareIntent.putExtra(Intent.EXTRA_SUBJECT, subject);
+				// shareIntent.putExtra(Intent.EXTRA_TEXT, body);
 				shareIntent.putExtra(Intent.EXTRA_STREAM, Uri.parse(url));
 				shareIntent.setType("image/jpeg");
 				startActivity(shareIntent);
 			} catch (FileNotFoundException e) {
-				Log.e(PartyBolle.LOG_TAG," Screenshot schreiben failed ",e);
+				Log.e(PartyBolle.LOG_TAG, " Screenshot schreiben failed ", e);
 			}
 
 			return true;
 		}
 		case MENU_CHALLENGE: {
-			//check twitter 
-			if(null==preferences.getString("twitter_name_verified", null))			{
+			// check twitter
+			if (null == preferences.getString("twitter_name_verified", null)) {
 				AlertDialog.Builder builder = new AlertDialog.Builder(this);
-				builder.setMessage("Alder wennde meene Uffjaben loesen willst, musste Twitter konfijurieren ick verwende dein Twittername um dich zu identifizieren!")
-				.setCancelable(false)
-				.setPositiveButton("Ja mach ick", new DialogInterface.OnClickListener() {
-					public void onClick(DialogInterface dialog, int id) {
-						dialog.cancel();
-					}
-				});
+				builder
+						.setMessage(
+								"Alder wennde meene Uffjaben loesen willst, musste Twitter konfijurieren ick verwende dein Twittername um dich zu identifizieren!")
+						.setCancelable(false).setPositiveButton("Ja mach ick",
+								new DialogInterface.OnClickListener() {
+									public void onClick(DialogInterface dialog,
+											int id) {
+										dialog.cancel();
+									}
+								});
 				AlertDialog alert = builder.create();
 				alert.show();
-			}else{	
-				Intent intent = new Intent(PartyBolle.this,PartyBolleUffjaben.class);
-		        PartyBolle.this.startActivity(intent);
+			} else {
+				Intent intent = new Intent(PartyBolle.this,
+						PartyBolleUffjaben.class);
+				PartyBolle.this.startActivity(intent);
 			}
 			return true;
 		}
 		case MENU_TWITTER: {
-			//check twitter 
-			if(null==preferences.getString("twitter_name_verified", null))			{
+			// check twitter
+			if (null == preferences.getString("twitter_name_verified", null)) {
 				AlertDialog.Builder builder = new AlertDialog.Builder(this);
-				builder.setMessage("Alder wennde meene Uffjaben loesen willst, musste Twitter konfijurieren ick verwende dein Twittername um dich zu identifizieren!")
-				.setCancelable(false)
-				.setPositiveButton("Ja mach ick", new DialogInterface.OnClickListener() {
-					public void onClick(DialogInterface dialog, int id) {
-						dialog.cancel();
-					}
-				});
+				builder
+						.setMessage(
+								"Alder wennde meene Uffjaben loesen willst, musste Twitter konfijurieren ick verwende dein Twittername um dich zu identifizieren!")
+						.setCancelable(false).setPositiveButton("Ja mach ick",
+								new DialogInterface.OnClickListener() {
+									public void onClick(DialogInterface dialog,
+											int id) {
+										dialog.cancel();
+									}
+								});
 				AlertDialog alert = builder.create();
 				alert.show();
-			}else{	
+			} else {
 				new TweetDialog(this).show();
 			}
 			return true;
 		}
 		case MENU_AUTOCHECKIN: {
 			Intent intent = new Intent(this, AutoCheckinActivity.class);
-			 PartyBolle.this.startActivity(intent);
-			 return true;
+			PartyBolle.this.startActivity(intent);
+			return true;
 		}
 		}
 
 		return super.onOptionsItemSelected(item);
 	}
-   
-   private void updateLocation() {
-		if(null==location)
+
+	private void updateLocation() {
+		if (null == location)
 			return;
 		mapView.getController().animateTo(location);
-//		//save in preferences
-//		SharedPreferences.Editor editor = preferences.edit();
-//		editor.putInt("my_location_lat", location.getLatitudeE6());
-//		editor.putInt("my_location_lon", location.getLongitudeE6());
+		// //save in preferences
+		// SharedPreferences.Editor editor = preferences.edit();
+		// editor.putInt("my_location_lat", location.getLatitudeE6());
+		// editor.putInt("my_location_lon", location.getLongitudeE6());
 		// Don't forget to commit your edits!!!
-//		editor.commit();	
+		// editor.commit();
 		Toast.makeText(this, "Updated Location", Toast.LENGTH_SHORT);
 	}
-
 
 	public MapView getMapView() {
 		return this.mapView;
 	}
 
 	public void showEvent(EventOverlayItem eventOverlayItem) {
-		lastestOverlay	=	eventOverlayItem;
+		lastestOverlay = eventOverlayItem;
 		// show mor informations
 		infoOverlay.showInfo(eventOverlayItem.getInfo(infoOverlay));
 		// move to location
 		mapView.getController().animateTo(eventOverlayItem.getPoint());
 	}
+	
+	public void showHaltestelle(HaltestellenOverlayItem haltestellenOverlayItem) {
+		lastestOverlay = haltestellenOverlayItem;
+		infoOverlay.showInfo(haltestellenOverlayItem.getInfo(infoOverlay));
+		mapView.getController().animateTo(haltestellenOverlayItem.getPoint());
+	}
 
 	public void showVenue(FoursquareOverlayItem item) {
-		lastestOverlay=item;
+		lastestOverlay = item;
 		infoOverlay.showInfo(item.getInfo(infoOverlay));
 		// move to location
 		mapView.getController().animateTo(item.getPoint());
 	}
 
 	public void showFavorite(PartyBolleOverlayItem item) {
-		lastestOverlay=item;
+		lastestOverlay = item;
 		infoOverlay.showInfo(item.getInfo(infoOverlay));
 		// move to location
 		mapView.getController().animateTo(item.getPoint());
 	}
 
 	public void showTweet(TwitterOverlayItem item) {
-		lastestOverlay	=	item;
+		lastestOverlay = item;
 
-		//		Status status	=	item.getStatus();
-		//		textview1.setText(status.getUser().getScreenName());
-		//		textview2.setText(status.getText());
-		//		uri	=	null;
+		// Status status = item.getStatus();
+		// textview1.setText(status.getUser().getScreenName());
+		// textview2.setText(status.getText());
+		// uri = null;
 		infoOverlay.showInfo(item.getInfo(infoOverlay));
 
 		// move to location
 		mapView.getController().animateTo(item.getPoint());
 	}
+	
+	public void update(StopsParser parser) {
+		List<Stop> stops = parser.getStops();
+		for (int i = 0; i < stops.size(); i++) {
+			haltestellenOverlay.addStop(stops.get(i));
+		}
+	
+		mapView.invalidate();
+		Toast.makeText(this, "refreshed Haltestellen #" + stops.size(),
+				Toast.LENGTH_SHORT).show();
+		haltestellenImageButton.setEnabled(true);
+	}
+
 	public void update(JSONArray locations) {
-		try{
+		try {
 			for (int i = 0; i < locations.length(); i++) {
 				JSONObject location = locations.getJSONObject(i);
 				eventOverlay.addEvent(location);
 			}
-			//force map redraw
+			// force map redraw
 			mapView.invalidate();
 			Toast.makeText(this, "refreshed locations #" + locations.length(),
 					Toast.LENGTH_SHORT).show();
 
-		}catch(Exception e){
-			Toast.makeText(this, "error refreshing locations " ,
+		} catch (Exception e) {
+			Toast.makeText(this, "error refreshing locations ",
 					Toast.LENGTH_SHORT).show();
-			Log.e(LOG_TAG, "error refreshing locations",e);
+			Log.e(LOG_TAG, "error refreshing locations", e);
 		}
-		//hide progressbar
+		// hide progressbar
 		findViewById(R.id.EventProgressBar).setVisibility(View.GONE);
 		eventImageButton.setEnabled(true);
 	}
 
-
 	public void update(Group<Group<Venue>> venues, boolean zoom) {
-		//alle alten venues loeschen
-		if(null!=venues){
+		// alle alten venues loeschen
+		if (null != venues) {
 			foursquareOverlay.cleanup();
-			int count=0;
-			double minX=999, minY=999, maxX=-999, maxY=-999;
+			int count = 0;
+			double minX = 999, minY = 999, maxX = -999, maxY = -999;
 			for (Group<Venue> group : venues) {
 				for (Venue venue : group) {
 					foursquareOverlay.addVenue(venue);
-					if(zoom){
-						double x= Double.parseDouble(venue.getGeolong());
-						double y= Double.parseDouble(venue.getGeolat());
-						if(x<minX)
-							minX=x;
-						if(x>maxX)
-							maxX=x;
-		
-						if(y<minY)
-							minY=y;
-						if(y>maxY)
-							maxY=y;
+					if (zoom) {
+						double x = Double.parseDouble(venue.getGeolong());
+						double y = Double.parseDouble(venue.getGeolat());
+						if (x < minX)
+							minX = x;
+						if (x > maxX)
+							maxX = x;
+
+						if (y < minY)
+							minY = y;
+						if (y > maxY)
+							maxY = y;
 						count++;
 					}
 				}
 			}
-			if(zoom){
-				int lon = (int)Math.round((minX+(maxX-minX)/2.0)*1000000);
-				int lat = (int)Math.round((minY+(maxY-minY)/2.0)*1000000);
-		
+			if (zoom) {
+				int lon = (int) Math
+						.round((minX + (maxX - minX) / 2.0) * 1000000);
+				int lat = (int) Math
+						.round((minY + (maxY - minY) / 2.0) * 1000000);
+
 				mapView.getController().setCenter(new GeoPoint(lat, lon));
-				if(count>1){
-					//TODO etwas weiter rauszoomen
-					int spanLon = (int)Math.round(((maxX-minX)/2.0)*1000000);
-					int spanLat = (int)Math.round(((maxY-minY)/2.0)*1000000);
+				if (count > 1) {
+					// TODO etwas weiter rauszoomen
+					int spanLon = (int) Math
+							.round(((maxX - minX) / 2.0) * 1000000);
+					int spanLat = (int) Math
+							.round(((maxY - minY) / 2.0) * 1000000);
 					mapView.getController().zoomToSpan(spanLat, spanLon);
 				}
 			}
 		}
-		//hide progressbar
+		// hide progressbar
 		findViewById(R.id.FoursquareProgressBar).setVisibility(View.GONE);
 		foursquareImageButton.setEnabled(true);
-		
-		//force map redraw
+
+		// force map redraw
 		mapView.invalidate();
 	}
 
-
 	public void update(List<Twitter.Status> tweets) {
-		for (Status tweet : tweets) {			
+		for (Status tweet : tweets) {
 			twitterOverlay.addTweet(tweet);
 		}
-		//hide progressbar
+		// hide progressbar
 		findViewById(R.id.TwitterProgressBar).setVisibility(View.GONE);
 		twitterImageButton.setEnabled(true);
 
-		//force map redraw
+		// force map redraw
 		mapView.invalidate();
 
 	}
 
-
-	
 	public void onLocationChanged(Location loc) {
-		this.actualLocation=loc;
-		if(null==this.location){
-			this.location=	new GeoPoint((int)Math.round(loc.getLatitude()*1000000), 
-					(int)Math.round(loc.getLongitude()*1000000));
+		this.actualLocation = loc;
+		if (null == this.location) {
+			this.location = new GeoPoint((int) Math
+					.round(loc.getLatitude() * 1000000), (int) Math.round(loc
+					.getLongitude() * 1000000));
 			updateLocation();
-		}
-		else
-			this.location=	new GeoPoint((int)Math.round(loc.getLatitude()*1000000), 
-					(int)Math.round(loc.getLongitude()*1000000));
+		} else
+			this.location = new GeoPoint((int) Math
+					.round(loc.getLatitude() * 1000000), (int) Math.round(loc
+					.getLongitude() * 1000000));
 
-		Log.i("PartyBolle","got Location fix "+loc.getLatitude()+" "+loc.getLongitude()+" accurracy : "+loc.getAccuracy());
+		Log.i("PartyBolle", "got Location fix " + loc.getLatitude() + " "
+				+ loc.getLongitude() + " accurracy : " + loc.getAccuracy());
 	}
 
-
-	
 	public void onProviderDisabled(java.lang.String arg0) {
-		// TODO warnung		
+		// TODO warnung
 	}
 
-
-	
 	public void onProviderEnabled(java.lang.String arg0) {
-		setUpLocationManager();		
+		setUpLocationManager();
 	}
 
-
-	
 	public void onStatusChanged(java.lang.String arg0, int arg1, Bundle arg2) {
 		// TODO wat is dat hier?
 
 	}
 
-
-	public void preferenceChanged()
-	{
+	public void preferenceChanged() {
 		twitterManager.verifyLogin();
 	}
 }
