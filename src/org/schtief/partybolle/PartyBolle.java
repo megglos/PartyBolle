@@ -571,6 +571,16 @@ public class PartyBolle extends MapActivity implements LocationListener {
 				haltestellenManager.getHaltestellen();
 			}
 		});
+		haltestellenImageButton.setOnLongClickListener(new OnLongClickListener() {
+
+			public boolean onLongClick(View arg0) {
+				lastestOverlay = null;
+				haltestellenOverlay.cleanup();
+				infoOverlay.showInfo(null);
+				mapView.invalidate();
+				return true;
+			}
+		});
 	}
 
 	protected void updateFavoriteState() {
@@ -892,6 +902,7 @@ public class PartyBolle extends MapActivity implements LocationListener {
 		Toast.makeText(this, "refreshed Haltestellen #" + stops.size(),
 				Toast.LENGTH_SHORT).show();
 		haltestellenImageButton.setEnabled(true);
+		findViewById(R.id.HaltestellenProgressBar).setVisibility(View.GONE);
 	}
 
 	public void update(JSONArray locations) {
@@ -911,7 +922,7 @@ public class PartyBolle extends MapActivity implements LocationListener {
 			Log.e(LOG_TAG, "error refreshing locations", e);
 		}
 		// hide progressbar
-		findViewById(R.id.HaltestellenProgressBar).setVisibility(View.GONE);
+		findViewById(R.id.EventProgressBar).setVisibility(View.GONE);
 		eventImageButton.setEnabled(true);
 	}
 
