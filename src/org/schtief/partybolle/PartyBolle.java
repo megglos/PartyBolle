@@ -911,7 +911,7 @@ public class PartyBolle extends MapActivity implements LocationListener {
 			Log.e(LOG_TAG, "error refreshing locations", e);
 		}
 		// hide progressbar
-		findViewById(R.id.EventProgressBar).setVisibility(View.GONE);
+		findViewById(R.id.HaltestellenProgressBar).setVisibility(View.GONE);
 		eventImageButton.setEnabled(true);
 	}
 
