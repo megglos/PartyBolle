@@ -40,6 +40,8 @@
     <string name="foursquare_web">foursquare.com</string>
 
     <string name="event_web">BARtime.de</string>
+    
+    <string name="haltestellen_abfahrinfo">Wann fahrn die Busse ab?</string>
 
     <string name="venues_search_label">Suche</string>
     <string name="venues_search_hint">z.B. Magnet Club</string>  
